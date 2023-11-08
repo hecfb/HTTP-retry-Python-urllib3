@@ -3,10 +3,21 @@ import random
 import urllib3
 from urllib3.util.retry import Retry
 from urllib3.exceptions import MaxRetryError
+from aws_wsgi import make_lambda_handler
+import os
+import logging
 
-# we will use the flask library to deploy the app
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# We will use the flask library to deploy the app
 
 app = Flask(__name__)
+
+api_gateway_id = os.getenv('API_GATEWAY_ID')
+aws_region = os.getenv('AWS_REGION', 'us-east-1')
+api_endpoint = f'https://{api_gateway_id}.execute-api.{aws_region}.amazonaws.com/prod'
+
 
 base_html = """
 <!DOCTYPE html>
@@ -117,7 +128,7 @@ def test_retry():
     try:
         # Make a request to the unstable endpoint
         response = http.request(
-            'GET', 'http://localhost:5000/unstable-endpoint')
+            'GET', f'{api_endpoint}/unstable-endpoint')
 
         # Return the response status code, body, and retry history as a JSON response
         return render_template_string(
@@ -127,14 +138,12 @@ def test_retry():
             retries=[
                 str(retry) for retry in response.retries.history] if response.retries else 'None'
         )
-
-
-# If the maximum retries are exceeded, return an error response
-
     except MaxRetryError as e:
 
-        return jsonify({'error': 'Max retries reached', 'details': str(e)}), 503
+        return jsonify({'error': 'Max retries reached', 'details': str(e)})
 
+
+lambda_handler = make_lambda_handler(app)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run()
